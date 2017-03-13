@@ -14,7 +14,7 @@
 
 #![allow(dead_code)]
 
-use openssl::crypto::symm;
+use openssl::{self, symm};
 use serde_json;
 use hyper;
 
@@ -691,6 +691,13 @@ pub enum Error {
     IOError(io::Error),
     Json(serde_json::Error),
     Hyper(hyper::Error),
+    Ssl(openssl::error::ErrorStack)
+}
+
+impl convert::From<openssl::error::ErrorStack> for Error {
+    fn from(e: openssl::error::ErrorStack) -> Error {
+        Error::Ssl(e)
+    }
 }
 
 impl convert::From<io::Error> for Error {
@@ -711,6 +718,7 @@ impl convert::From<hyper::Error> for Error {
     }
 }
 
+
 impl ::std::error::Error for Error {
     fn description(&self) -> &str {
         match *self {
@@ -719,6 +727,7 @@ impl ::std::error::Error for Error {
             Error::IOError(ref e) => e.description(),
             Error::Json(ref e) => e.description(),
             Error::Hyper(ref e) => e.description(),
+            Error::Ssl(ref e) => e.description(),
         }
     }
 }
@@ -731,6 +740,7 @@ impl ::std::fmt::Display for Error {
             Error::IOError(ref e) => e.fmt(f),
             Error::Json(ref e) => e.fmt(f),
             Error::Hyper(ref e) => e.fmt(f),
+            Error::Ssl(ref e) => e.fmt(f),
         }
     }
 }
@@ -857,8 +867,8 @@ impl Conn {
     }
 
     pub fn enable_encyption(&mut self, key: &[u8], decrypt: bool) {
-        let cipher = symm::Crypter::new(symm::Type::AES_128_CFB8);
-        cipher.init(if decrypt { symm::Mode::Decrypt } else { symm::Mode::Encrypt }, key, key);
+        let mode = if decrypt { symm::Mode::Decrypt } else { symm::Mode::Encrypt };
+        let cipher = symm::Crypter::new(symm::Cipher::aes_128_cfb8(), mode, key, Option::Some(key)).unwrap();
         self.cipher = Option::Some(cipher);
     }
 
@@ -906,29 +916,29 @@ impl Conn {
 
         let invalid_status = || Error::Err("Invalid status".to_owned());
 
-        let version = try!(val.find("version").ok_or(invalid_status()));
-        let players = try!(val.find("players").ok_or(invalid_status()));
+        let version = try!(val.get("version").ok_or(invalid_status()));
+        let players = try!(val.get("players").ok_or(invalid_status()));
 
         Ok((Status {
             version: StatusVersion {
-                name: try!(version.find("name").and_then(Value::as_string).ok_or(invalid_status()))
+                name: try!(version.get("name").and_then(Value::as_str).ok_or(invalid_status()))
                           .to_owned(),
-                protocol: try!(version.find("protocol")
+                protocol: try!(version.get("protocol")
                                       .and_then(Value::as_i64)
                                       .ok_or(invalid_status())) as i32,
             },
             players: StatusPlayers {
-                max: try!(players.find("max")
+                max: try!(players.get("max")
                                  .and_then(Value::as_i64)
                                  .ok_or(invalid_status())) as i32,
-                online: try!(players.find("online")
+                online: try!(players.get("online")
                                     .and_then(Value::as_i64)
                                     .ok_or(invalid_status())) as i32,
                 sample: Vec::new(), /* TODO */
             },
-            description: format::Component::from_value(try!(val.find("description")
+            description: format::Component::from_value(try!(val.get("description")
                                                                .ok_or(invalid_status()))),
-            favicon: val.find("favicon").and_then(Value::as_string).map(|v| v.to_owned()),
+            favicon: val.get("favicon").and_then(Value::as_str).map(|v| v.to_owned()),
         },
             ping))
     }
@@ -967,10 +977,9 @@ impl Read for Conn {
             Option::None => self.stream.read(buf),
             Option::Some(cipher) => {
                 let ret = try!(self.stream.read(buf));
-                let data = cipher.update(&buf[..ret]);
-                for i in 0..ret {
-                    buf[i] = data[i];
-                }
+                let mut data = vec![0; ret + 128]; // 128 is the block size
+                cipher.update(&buf[..ret], &mut data)?;
+                (&mut buf[..ret]).copy_from_slice(&data[..ret]);
                 Ok(ret)
             }
         }
@@ -982,8 +991,9 @@ impl Write for Conn {
         match self.cipher.as_mut() {
             Option::None => self.stream.write(buf),
             Option::Some(cipher) => {
-                let data = cipher.update(buf);
-                try!(self.stream.write_all(&data[..]));
+                let mut data = vec![0; buf.len() + 128]; // 128 is the block size
+                cipher.update(buf, &mut data)?;
+                self.stream.write_all(&data[..buf.len()])?;
                 Ok(buf.len())
             }
         }

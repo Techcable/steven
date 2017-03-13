@@ -27,7 +27,7 @@ use render;
 use settings::Stevenkey;
 use ecs;
 use entity;
-use cgmath::{self, Point};
+use cgmath::{self, EuclideanSpace};
 use types::Gamemode;
 use shared::{Axis, Position};
 use format;
@@ -36,6 +36,7 @@ mod sun;
 pub mod plugin_messages;
 pub mod target;
 
+#[allow(dead_code)]
 pub struct Server {
     username: String,
     uuid: protocol::UUID,
@@ -103,8 +104,8 @@ macro_rules! handle_packet {
 impl Server {
 
     pub fn connect(resources: Arc<RwLock<resources::Manager>>, profile: mojang::Profile, address: &str) -> Result<Server, protocol::Error> {
-        use openssl::crypto::pkey;
-        use openssl::crypto::rand::rand_bytes;
+        use openssl::rsa;
+        use openssl::rand::rand_bytes;
         let mut conn = try!(protocol::Conn::new(address));
 
         let host = conn.host.clone();
@@ -145,12 +146,29 @@ impl Server {
             };
         }
 
-        let mut key = pkey::PKey::new();
-        key.load_pub(&packet.public_key.data);
-        let shared = rand_bytes(16);
+        let key = rsa::Rsa::public_key_from_der(&packet.public_key.data)?;
+        let shared = {
+            let mut result = [0; 16];
+            rand_bytes(&mut result)?;
+            result
+        };
 
-        let shared_e = key.public_encrypt_with_padding(&shared, pkey::EncryptionPadding::PKCS1v15);
-        let token_e = key.public_encrypt_with_padding(&packet.verify_token.data, pkey::EncryptionPadding::PKCS1v15);
+        let shared_e = {
+            let mut result: Vec<u8> = vec![0; key.size()];
+            let source = &shared;
+            assert!(source.len() < key.size() - 41, "Source data exceeds max length {}: {}", key.size() - 41, source.len());
+            let len = key.public_encrypt(source, &mut result, rsa::PKCS1_PADDING)?;
+            result.truncate(len);
+            result
+        };
+        let token_e = {
+            let mut result: Vec<u8> = vec![0; key.size()];
+            let source = &packet.verify_token.data;
+            assert!(source.len() < key.size() - 41, "Source data exceeds max length {}: {}", key.size() - 41, source.len());
+            let len = key.public_encrypt(source, &mut result, rsa::PKCS1_PADDING)?;
+            result.truncate(len);
+            result
+        };
 
         try!(profile.join_server(&packet.server_id, &shared, &packet.public_key.data));
 
@@ -327,7 +345,7 @@ impl Server {
         if let Some(player) = self.player {
             let position = self.entities.get_component(player, self.position).unwrap();
             let rotation = self.entities.get_component(player, self.rotation).unwrap();
-            renderer.camera.pos = cgmath::Point::from_vec(position.position + cgmath::Vector3::new(0.0, 1.62, 0.0));
+            renderer.camera.pos = EuclideanSpace::from_vec(position.position + cgmath::Vector3::new(0.0, 1.62, 0.0));
             renderer.camera.yaw = rotation.yaw;
             renderer.camera.pitch = rotation.pitch;
         }
@@ -783,7 +801,7 @@ impl Server {
                                 continue;
                             },
                         };
-                        if let Some(skin_url) = skin_blob.lookup("textures.SKIN.url").and_then(|v| v.as_string()) {
+                        if let Some(skin_url) = skin_blob.pointer("textures/SKIN/url").and_then(|v| v.as_str()) {
                             info.skin_url = Some(skin_url.to_owned());
                         }
                     }

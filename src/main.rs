@@ -14,16 +14,17 @@
 
 #![recursion_limit="300"]
 #![feature(const_fn)]
-#![feature(rc_would_unwrap)]
 
 extern crate sdl2;
 extern crate zip;
 extern crate image;
 extern crate time;
 extern crate byteorder;
+#[macro_use]
 extern crate serde_json;
 extern crate openssl;
 extern crate hyper;
+extern crate hyper_openssl;
 extern crate flate2;
 extern crate rand;
 extern crate rustc_serialize;
@@ -293,7 +294,7 @@ fn handle_window_event(window: &sdl2::video::Window,
                        event: sdl2::event::Event) {
     use sdl2::event::Event;
     use sdl2::keyboard::Keycode;
-    use sdl2::mouse::Mouse;
+    use sdl2::mouse::MouseButton;
     use std::f64::consts::PI;
 
     let mouse = window.subsystem().sdl().mouse();
@@ -327,7 +328,7 @@ fn handle_window_event(window: &sdl2::video::Window,
                 ui_container.hover_at(game, x as f64, y as f64, width as f64, height as f64);
             }
         }
-        Event::MouseButtonUp{mouse_btn: Mouse::Left, x, y, ..} => {
+        Event::MouseButtonUp{mouse_btn: MouseButton::Left, x, y, ..} => {
             let (width, height) = window.size();
 
             if game.server.is_connected() && !game.focused && !game.screen_sys.is_current_closable() {
@@ -344,7 +345,7 @@ fn handle_window_event(window: &sdl2::video::Window,
                 ui_container.click_at(game, x as f64, y as f64, width as f64, height as f64);
             }
         }
-        Event::MouseButtonDown{mouse_btn: Mouse::Right, ..} => {
+        Event::MouseButtonDown{mouse_btn: MouseButton::Right, ..} => {
             if game.focused {
                 game.server.on_right_click(&mut game.renderer);
             }

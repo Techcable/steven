@@ -319,7 +319,7 @@ impl World {
 
     pub fn compute_render_list(&mut self, renderer: &mut render::Renderer) {
         use chunk_builder;
-        use cgmath::Vector;
+        use cgmath::InnerSpace;
         use std::collections::VecDeque;
         self.render_list.clear();
 

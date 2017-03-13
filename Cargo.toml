@@ -10,22 +10,25 @@ authors = [ "Thinkofdeath <thinkofdeath@spigotmc.org>" ]
 opt-level = 1
 
 [dependencies]
-sdl2 = "0.16.1"
-byteorder = "0.5.0"
-hyper = "0.8.0"
-serde = "0.7.0"
-serde_json = "0.7.0"
-flate2 = "0.2.13"
-zip = "0.1.16"
-image = "0.7.0"
-time = "0.1.34"
-rand = "0.3.14"
-rustc-serialize = "0.3.18"
-log = "0.3.5"
-cgmath = "0.7.0"
-lazy_static = "0.1.15"
-collision = {git = "https://github.com/csherratt/collision-rs", rev = "f80825e"}
-openssl = "0.7.8"
+sdl2 = "^0.29.0"
+byteorder = "^1.0.0"
+hyper = "^0.10.5"
+# Recent versions of hyper no longer include support for TLS by default
+# We explicitly include TLS support via openssl, which we already require anyways
+hyper-openssl = "^0.2.3"
+serde = "^0.9.11"
+serde_json = "^0.9.9"
+flate2 = "^0.2.17"
+zip = "^0.2.2"
+image = "^0.12.3"
+time = "^0.1.36"
+rand = "^0.3.15"
+rustc-serialize = "^0.3.22"
+log = "^0.3.7"
+cgmath = "^0.12.0"
+lazy_static = "^0.2.4"
+collision = "^0.9.0"
+openssl = "^0.9.8"
 # clippy = "*"
 
 [dependencies.steven_gl]

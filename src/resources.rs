@@ -25,6 +25,8 @@ use std::hash::BuildHasherDefault;
 use serde_json;
 
 use hyper;
+use hyper::net::HttpsConnector;
+use hyper_openssl::OpensslClient;
 use zip;
 
 use types::hash::FNVHash;
@@ -285,7 +287,7 @@ impl Manager {
             self.vanilla_assets_chan = Some(recv);
         }
         thread::spawn(move || {
-            let client = hyper::Client::new();
+            let client = hyper::Client::with_connector(HttpsConnector::new(OpensslClient::new().unwrap()));;
             if fs::metadata(&location).is_err(){
                 fs::create_dir_all(location.parent().unwrap()).unwrap();
                 let res = client.get(ASSET_INDEX_URL)
@@ -310,10 +312,10 @@ impl Manager {
             let file = fs::File::open(&location).unwrap();
             let index: serde_json::Value = serde_json::from_reader(&file).unwrap();
             let root_location = path::Path::new("./objects/");
-            let objects = index.find("objects").and_then(|v| v.as_object()).unwrap();
+            let objects = index.get("objects").and_then(|v| v.as_object()).unwrap();
             Self::add_task(&progress_info, "Downloading Assets", "./objects", objects.len() as u64);
             for (k, v) in objects {
-                let hash = v.find("hash").and_then(|v| v.as_string()).unwrap();
+                let hash = v.get("hash").and_then(|v| v.as_str()).unwrap();
                 let hash_path = format!("{}/{}", &hash[..2], hash);
                 let location = root_location.join(&hash_path);
                 if fs::metadata(&location).is_err(){
@@ -321,7 +323,7 @@ impl Manager {
                     let res = client.get(&format!("http://resources.download.minecraft.net/{}", hash_path))
                                     .send()
                                     .unwrap();
-                    let length = v.find("size").and_then(|v| v.as_u64()).unwrap();
+                    let length = v.get("size").and_then(|v| v.as_u64()).unwrap();
                     Self::add_task(&progress_info, "Downloading Asset", k, length);
                     let mut tmp_file = location.to_owned();
                     tmp_file.set_file_name(format!("{}.tmp", hash));
@@ -354,7 +356,7 @@ impl Manager {
 
         let progress_info = self.vanilla_progress.clone();
         thread::spawn(move || {
-            let client = hyper::Client::new();
+            let client = hyper::Client::with_connector(HttpsConnector::new(OpensslClient::new().unwrap()));
             let res = client.get(VANILLA_CLIENT_URL)
                             .send()
                             .unwrap();
@@ -456,10 +458,10 @@ impl ObjectPack {
         let location = path::Path::new(&loc);
         let file = fs::File::open(&location).unwrap();
         let index: serde_json::Value = serde_json::from_reader(&file).unwrap();
-        let objects = index.find("objects").and_then(|v| v.as_object()).unwrap();
+        let objects = index.get("objects").and_then(|v| v.as_object()).unwrap();
         let mut hash_objs = HashMap::with_hasher(BuildHasherDefault::default());
         for (k, v) in objects {
-            hash_objs.insert(k.clone(), v.find("hash").and_then(|v| v.as_string()).unwrap().to_owned());
+            hash_objs.insert(k.clone(), v.get("hash").and_then(|v| v.as_str()).unwrap().to_owned());
         }
         ObjectPack {
             objects: hash_objs,

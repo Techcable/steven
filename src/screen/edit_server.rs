@@ -13,12 +13,11 @@
 // limitations under the License.
 
 use std::fs;
-use std::collections::BTreeMap;
 
 use ui;
 use render;
 
-use serde_json::{self, Value};
+use serde_json::{self, Value, Map};
 
 pub struct EditServerEntry {
     elements: Option<UIElements>,
@@ -46,14 +45,14 @@ impl EditServerEntry {
         let mut servers_info = match fs::File::open("servers.json") {
             Ok(val) => serde_json::from_reader(val).unwrap(),
             Err(_) => {
-                let mut info = BTreeMap::default();
+                let mut info = Map::new();
                 info.insert("servers".to_owned(), Value::Array(vec![]));
                 Value::Object(info)
             }
         };
 
         let new_entry = {
-            let mut entry = BTreeMap::default();
+            let mut entry = Map::new();
             entry.insert("name".to_owned(), Value::String(name.to_owned()));
             entry.insert("address".to_owned(), Value::String(address.to_owned()));
             Value::Object(entry)

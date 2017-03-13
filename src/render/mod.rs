@@ -29,9 +29,12 @@ use image;
 use image::GenericImage;
 use byteorder::{WriteBytesExt, NativeEndian};
 use serde_json;
-use cgmath::{self, Vector, Point, SquareMatrix};
+use cgmath::{self, EuclideanSpace, SquareMatrix, Zero};
 use world;
 use collision;
+use hyper;
+use hyper::net::HttpsConnector;
+use hyper_openssl::OpensslClient;
 
 use std::hash::BuildHasherDefault;
 use types::hash::FNVHash;
@@ -257,7 +260,7 @@ impl Renderer {
 
             self.perspective_matrix = cgmath::Matrix4::from(
                 cgmath::PerspectiveFov {
-                    fovy: cgmath::Rad::from(cgmath::Deg{s: 90f32}),
+                    fovy: cgmath::Rad::from(cgmath::Deg(90f32)),
                     aspect: (width as f32 / height as f32),
                     near: 0.1f32,
                     far: 500.0f32,
@@ -833,8 +836,7 @@ impl TextureManager {
     }
 
     fn process_skins(recv: mpsc::Receiver<String>, reply: mpsc::Sender<(String, Option<image::DynamicImage>)>) {
-        use hyper;
-        let client = hyper::Client::new();
+        let client = hyper::Client::with_connector(HttpsConnector::new(OpensslClient::new().unwrap()));
         loop {
             let hash = match recv.recv() {
                 Ok(val) => val,
@@ -1056,12 +1058,12 @@ impl TextureManager {
         let res = self.resources.clone();
         if let Some(val) = res.read().unwrap().open(plugin, &path) {
             let meta: serde_json::Value = serde_json::from_reader(val).unwrap();
-            let animation = meta.find("animation").unwrap();
-            let frame_time = animation.find("frametime").and_then(|v| v.as_i64()).unwrap_or(1);
-            let interpolate = animation.find("interpolate")
-                                       .and_then(|v| v.as_boolean())
+            let animation = meta.get("animation").unwrap();
+            let frame_time = animation.get("frametime").and_then(|v| v.as_i64()).unwrap_or(1);
+            let interpolate = animation.get("interpolate")
+                                       .and_then(|v| v.as_bool())
                                        .unwrap_or(false);
-            let frames = if let Some(frames) = animation.find("frames")
+            let frames = if let Some(frames) = animation.get("frames")
                                                         .and_then(|v| v.as_array()) {
                 let mut out = Vec::with_capacity(frames.len());
                 for frame in frames {
@@ -1072,8 +1074,8 @@ impl TextureManager {
                         })
                     } else {
                         out.push(AnimationFrame{
-                            index: frame.find("index").unwrap().as_i64().unwrap() as usize,
-                            time: frame_time * frame.find("frameTime").unwrap().as_i64().unwrap(),
+                            index: frame.get("index").unwrap().as_i64().unwrap() as usize,
+                            time: frame_time * frame.get("frameTime").unwrap().as_i64().unwrap(),
                         })
                     }
                 }

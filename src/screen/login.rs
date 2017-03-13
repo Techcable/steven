@@ -201,6 +201,7 @@ impl super::Screen for Login {
                         return Some(Box::new(super::ServerList::new(None)));
                     },
                     Err(err) => {
+                        error!("Error logging in: {:?}", err);
                         elements.login_error.borrow_mut().text = format!("{}", err);
                     },
                 }
