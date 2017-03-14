@@ -934,6 +934,7 @@ impl Section {
         section
     }
 
+    #[inline]
     fn get_block(&self, x: i32, y: i32, z: i32) -> block::Block {
         self.blocks.get(((y << 8) | (z << 4) | x) as usize)
     }

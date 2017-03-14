@@ -1,8 +1,9 @@
-
+#![feature(try_from)]
 #![recursion_limit="300"]
 
 extern crate cgmath;
 extern crate collision;
+extern crate fnv;
 #[macro_use]
 extern crate lazy_static;
 extern crate steven_shared as shared;
@@ -10,11 +11,15 @@ extern crate steven_shared as shared;
 use shared::{Axis, Direction, Position};
 use collision::Aabb3;
 use cgmath::Point3;
+use fnv::FnvHashMap;
 
 pub mod material;
 pub use self::material::Material;
 
 pub use self::Block::*;
+
+use std::collections::HashSet;
+use std::convert::TryFrom;
 
 pub trait WorldAccess {
     fn get_block(&self, pos: Position) -> Block;
@@ -117,6 +122,19 @@ macro_rules! define_blocks {
 
             pub fn by_vanilla_id(id: usize) -> Block {
                 VANILLA_ID_MAP.get(id).and_then(|v| *v).unwrap_or(Block::Missing{})
+            }
+
+            #[inline]
+            pub fn internal_id(&self) -> u16 {
+                match INTERNAL_IDS.get(self) {
+                    Some(id) => *id,
+                    None => panic!("Block has no internal id: {:?}", self)
+                }
+            }
+
+            #[inline]
+            pub fn by_internal_id(id: u16) -> Block {
+                BY_INTERNAL_ID[id as usize]
             }
 
             #[allow(unused_variables, unreachable_code)]
@@ -232,8 +250,9 @@ macro_rules! define_blocks {
         }
 
         lazy_static! {
-            static ref VANILLA_ID_MAP: Vec<Option<Block>> = {
-                let mut blocks = vec![];
+            static ref BY_INTERNAL_ID: Vec<Block> = {
+                // NOTE: For some strange reason, there are duplicate blocks, so we need a set of blocks
+                let mut blocks = HashSet::new();
                 $({
                     #[allow(non_camel_case_types, dead_code)]
                     struct CombinationIter<$($fname),*> {
@@ -323,25 +342,50 @@ macro_rules! define_blocks {
                         }),*
                     );
                     for block in iter {
-                        if let Some(id) = block.get_vanilla_id() {
-                            if blocks.len() <= id {
-                                blocks.resize(id + 1, None);
-                            }
-                            if blocks[id].is_none() {
-                                blocks[id] = Some(block);
-                            } else {
-                                panic!(
-                                    "Tried to register {:#?} to {}:{} but {:#?} was already registered",
-                                    block,
-                                    id >> 4,
-                                    id & 0xF,
-                                    blocks[id]
-                                );
-                            }
-                        }
+                        blocks.insert(block);
                     }
                 })+
+                blocks.into_iter().collect() // Convert the set into a Vec (we don't care about indexes)
+            };
 
+            /*
+             * A FnvHashMap uses the 'fnv' hash function, which is noticeably faster for small values
+             * The primary disadvantage is that it's less collision resistant than SipHash
+             * However, since this is a minecraft _client_, we aren't realy worried much about a DOS.
+             */
+            static ref INTERNAL_IDS: FnvHashMap<Block, u16> = {
+                let mut result = FnvHashMap::with_capacity_and_hasher(BY_INTERNAL_ID.len(), Default::default());
+                for (index, block) in BY_INTERNAL_ID.iter().enumerate() {
+                    match u16::try_from(index) {
+                        Ok(id) => {
+                            let previous_value = result.insert(block.clone(), id);
+                            assert!(previous_value.is_none(), "Block {:?} has two ids: {}, {}", block, previous_value.unwrap(), id);
+                        },
+                        Err(_) => panic!("Internal id for {:?} won't fit in a u16: {}", block, index)
+                    }
+                }
+                result
+            };
+            static ref VANILLA_ID_MAP: Vec<Option<Block>> = {
+                let mut blocks = Vec::with_capacity(BY_INTERNAL_ID.len());
+                for block in BY_INTERNAL_ID.iter() {
+                    if let Some(id) = block.get_vanilla_id() {
+                        if blocks.len() <= id {
+                            blocks.resize(id + 1, None);
+                        }
+                        if blocks[id].is_none() {
+                            blocks[id] = Some(block.clone());
+                        } else {
+                            panic!(
+                                "Tried to register {:#?} to {}:{} but {:#?} was already registered",
+                                block,
+                                id >> 4,
+                                id & 0xF,
+                                blocks[id]
+                            );
+                        }
+                    }
+                }
                 blocks
             };
         }

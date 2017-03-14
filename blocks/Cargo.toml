@@ -4,10 +4,10 @@ version = "0.0.1"
 authors = [ "Thinkofdeath <thinkofdeath@spigotmc.org>" ]
 
 [dependencies]
-lazy_static = "0.2.*"
-cgmath = "0.12.*"
-collision = "0.9.0"
-
+lazy_static = "^0.2.4"
+cgmath = "^0.12.0"
+collision = "^0.9.0"
+fnv = "^1.0.5"
 
 [dependencies.steven_shared]
 path = "../shared"
