@@ -836,7 +836,9 @@ impl TextureManager {
     }
 
     fn process_skins(recv: mpsc::Receiver<String>, reply: mpsc::Sender<(String, Option<image::DynamicImage>)>) {
-        let client = hyper::Client::with_connector(HttpsConnector::new(OpensslClient::new().unwrap()));
+        use hyper::client::pool::{self, Pool};
+        let pool = Pool::with_connector(pool::Config::default(), HttpsConnector::new(OpensslClient::new().unwrap()));
+        let client = hyper::Client::with_connector(pool);
         loop {
             let hash = match recv.recv() {
                 Ok(val) => val,

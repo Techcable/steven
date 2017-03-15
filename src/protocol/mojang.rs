@@ -58,8 +58,8 @@ impl Profile {
             ));
         }
         Ok(Profile {
-            username: ret.pointer("selectedProfile/name").and_then(|v| v.as_str()).unwrap().to_owned(),
-            id: ret.pointer("selectedProfile/id").and_then(|v| v.as_str()).unwrap().to_owned(),
+            username: ret.pointer("/selectedProfile/name").and_then(|v| v.as_str()).unwrap().to_owned(),
+            id: ret.pointer("/selectedProfile/id").and_then(|v| v.as_str()).unwrap().to_owned(),
             access_token: ret.get("accessToken").and_then(|v| v.as_str()).unwrap().to_owned(),
         })
     }
@@ -93,8 +93,8 @@ impl Profile {
                 ));
             }
             return Ok(Profile {
-                username: ret.pointer("selectedProfile/name").and_then(|v| v.as_str()).unwrap().to_owned(),
-                id: ret.pointer("selectedProfile/id").and_then(|v| v.as_str()).unwrap().to_owned(),
+                username: ret.pointer("/selectedProfile/name").and_then(|v| v.as_str()).unwrap().to_owned(),
+                id: ret.pointer("/selectedProfile/id").and_then(|v| v.as_str()).unwrap().to_owned(),
                 access_token: ret.get("accessToken").and_then(|v| v.as_str()).unwrap().to_owned(),
             });
         }
